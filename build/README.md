@@ -2,7 +2,7 @@
 
 （待写）这一步要做：
 
-1. 拉上游（见 `../upstream/README.md`）
+1. 拉上游（见 `../UPSTREAM.md`）
 2. ⭐ **换成我们的品牌** —— 依 `BRAND_GUIDELINES.md`：
    产品名**不得含 "DeepSeek Harness"**（注册商标）；关于页写 "built on DSH, MIT" 并保留 MIT 声明
 3. ⭐ **把 `../plugins/*` 内置进去**（预装，随版本发布）
