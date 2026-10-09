@@ -137,10 +137,17 @@ export function apply(ctx) {
       k: { type: 'number', required: false, description: '返回条数上限，默认 12' },
     },
     timeoutMs: 60000,
+    // ⭐ register 硬要求 output { schema, render }
+    //    形状照抄上游 packages/experimental/tool-session-query/src/index.ts:46 的 TEXT_OUTPUT
+    //    ⚠️ execute 返回**字符串**，由 render 包成 text 块
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value == null ? '' : value) }],
+    },
     execute: (args) => {
       const k = Math.min(Math.max(Number((args && args.k) || 12), 1), 30)
       // ⭐ 工具只负责把同一操作的结果包成工具结果文本（失败原因也照原样给模型看）。
-      return { text: retrieveText(String((args && args.topic) || ''), k).text }
+      return retrieveText(String((args && args.topic) || ''), k).text
     },
   })
 }
