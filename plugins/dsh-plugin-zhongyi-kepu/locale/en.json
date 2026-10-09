@@ -1,1 +1,6 @@
-{ "name": "Classics explainer", "desc": "Topic → retrieve classics → compliant copy", "topicPlaceholder": "Enter a topic (e.g. autumn dryness / insomnia)", "generate": "Generate", "collapse": "Collapse", "notWired": "not wired" }
+{
+  "meta": {
+    "title": "Classics Explainer",
+    "description": "Chinese-medicine classics explainer content production: topic → sourced retrieval from the classics → compliant copy."
+  }
+}

@@ -1,5 +1,10 @@
 # 交接：给 DSH 会话 —— 把「中医典籍科普」插件的 Client 半边接上线
 
+> **⭐ 2026-10-10 00:20 更新：代码部分已由 `preset-standard` 的桌面会话做完并离线验证。**
+> **收尾（装进 profile ＋ 真机点一次按钮）见 [`WIRING-REPORT-CLIENT.md`](WIRING-REPORT-CLIENT.md)。**
+> **那份报告里有本文件 §七 要的三样东西：改了哪些文件 / 查到的确切接口 / 验证结果，
+> 以及「为什么必须用 Creator（`cordis`）预设的会话来装」——普通预设里 `plugin_manager` 是关的。**
+>
 > **给读这份文件的 DSH 会话**：你和写这份文件的那个 agent 不是同一个会话。
 > 它**能写代码但拿不到 `cordis_inspect_query` / `plugin_manager`**，
 > 所以**需要 inspection 的那部分（Client↔Host 桥、locale service、slot props）交给有工具的你来做**。
