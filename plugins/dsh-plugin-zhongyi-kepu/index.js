@@ -16,8 +16,7 @@
  *    ⇒ **操作的实现只有一份**，失败也由它一处给出原因，两边共享同一套结果文本。
  *    ⚠️ `retrieve()` 的检索逻辑一行未动（那是唯一实测过的部分）。
  */
-import { defineTool } from '@deepseek-ai/dsh-tools'
-import { spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'   // ⚠️ 只用 Node 内建模块；⛔ 绝不 import @deepseek-ai/*
 
 export const name = 'zhongyi-kepu'
 /**
@@ -127,7 +126,7 @@ function applyCommand(ctx) {
 
 export function apply(ctx) {
   applyCommand(ctx)
-  ctx.tools.register(defineTool({
+  ctx.tools.register({
     name: 'zhongyi_retrieve',
     description:
       '从中医典籍库检索与一个主题相关的原文条文，每条都带出处（细到篇名，或至少到书名）。' +
@@ -143,5 +142,5 @@ export function apply(ctx) {
       // ⭐ 工具只负责把同一操作的结果包成工具结果文本（失败原因也照原样给模型看）。
       return { text: retrieveText(String((args && args.topic) || ''), k).text }
     },
-  }))
+  })
 }

@@ -1,10 +1,11 @@
-# 接线报告 ＋ 下一步（给 Creator / cordis 预设的会话）
+# 接线报告 ＋ 安装记录
 
-> **写给下一个会话**：这份文件是「Client 半边接线」这件事的收尾交接。
-> `HANDOVER-TO-DSH.md` 要求的**代码部分已经做完并离线验证**；
-> **只剩「装进 profile ＋ 真机点一次按钮」这一步**，而它在普通会话里做不了（原因见 §4）。
+> **本文件由 DSH 桌面 GUI 会话（preset-standard，无 `cordis_*` / `plugin_manager` 工具）写出。**
+> `HANDOVER-TO-DSH.md` 要的三件事都在这里：**改了哪些文件**（§7）、**查到的确切接口**（§2）、
+> **验证结果**（§3 离线全通、§5.3 真机待点）。
 >
-> 本文件由 **DSH 桌面 GUI 会话（`preset-standard`）** 于 2026-10-10 00:20 写出。
+> **状态（2026-10-10 00:35）**：代码 ✅ 接线完毕 · ✅ 已装进 desktop profile（§5.1）
+> · ⚠️ **待 captain 两步**：① 让 App 重组 profile（§5.2）② 真机点一次按钮（§5.3）
 
 ---
 
@@ -15,8 +16,8 @@
 | ① 硬编码中文 ⇒ 走 Client locale service | ✅ 完成 |
 | ②「生成」按钮接线（Client ⇒ Host ⇒ 渲染条文） | ✅ 完成 |
 | ③ `apply` 里的资源用 effect 注册 | ✅ 完成（`ctx.effect`） |
-| ④ 验证：**点一次按钮，确认真出结果、真报错** | 🟡 **离线全通**（§3）；**真机点击待做**（§5） |
-| ⑤ 装进 desktop profile | ⛔ **未做** —— 本会话没有 `plugin_manager`（§4） |
+| ④ 验证：**点一次按钮，确认真出结果、真报错** | 🟡 **离线全通**（§3）；**真机点击待 captain 点一下**（§5.3） |
+| ⑤ 装进 desktop profile | ✅ **已装**（§5.1，官方 `dsh plugin` CLI）；⚠️ **运行中的 app 还没重组 ⇒ 需重启/切换才生效**（§5.2） |
 
 改动文件（工作区已改，**未提交**）：
 
@@ -154,11 +155,11 @@ light/dark 主题下的观感（无浏览器控制，`verification.md` 明确不
 
 ---
 
-## 4. ⛔ 为什么本会话做不了「安装 + 真机验证」
+## 4. ⛔ 为什么本会话拿不到 inspection / plugin_manager（安装已改走 CLI，见 §5.1）
 
-1. **插件没装**：`~/.dsh/profiles/desktop/cordis.yml` 里**没有** `zhongyi-kepu` 行，
-   `package.json` 的 `dsh.profile.bundles` 只有 `…dsh-base / dsh-web-app / dsh-plugin-whale-pet`。
-   ⇒ 原 HANDOVER 里「面板已渲染出来」指的应是先前那个 `dsh-plugin-zhongyi-hello`（已卸），**不是本插件**。
+1. **原 HANDOVER 说「面板已渲染出来」不成立**：我刚接手时 `~/.dsh/profiles/desktop/cordis.yml` 里
+   没有 `zhongyi-kepu` 行，`package.json` 的 `dsh.profile.bundles` 只有 `…dsh-base / dsh-web-app / dsh-plugin-whale-pet`。
+   ⇒ 那句指的应是先前那个 `dsh-plugin-zhongyi-hello`（已卸），**不是本插件**。**现已装好（§5.1）。**
 2. **本会话没有 `plugin_manager` / `cordis_inspect_query`**，查清了原因（`cordis.yml`）：
 
    | 预设 | `tool-cordis` | `tool-plugin-manager` |
@@ -176,27 +177,79 @@ light/dark 主题下的观感（无浏览器控制，`verification.md` 明确不
 
 ---
 
-## 5. ⭐ 下一步（Creator 会话照做即可，预计 10 分钟）
+## 5. ⭐ 安装与真机验证
 
-**怎么进 Creator**（captain 操作）：Plugins 页 →「Add plugin」▾ →「让 agent 创建插件」；
-或 设置 → 智能体预设 → Creator（它会开一个新任务并选 `cordis`）。
+> **2026-10-10 00:35 更新：安装已完成**，由 `preset-standard` 的会话用**官方 `dsh plugin` CLI** 做的
+> （本会话仍无 `plugin_manager`，详见 §4）。**剩下两步要 captain 动手**：激活 ＋ 点一次按钮。
 
-进入后让那个会话做这三步：
+### 5.1 已做：装进 desktop profile
 
-1. **装**：`plugin_manager` `action: install_bundle`，`target` 用**绝对目录**
-   `/Users/nicklaus/Desktop/600-work_programme/qys-for-clinic/plugins/dsh-plugin-zhongyi-kepu`
-   （本包无 `peerDependencies`、无 build script ⇒ 不该被版本兼容闸拦下、不会有待批 build）。
-   读返回值：`application` / `warnings` 决定是否真的生效。
-2. **确认行 + slot**：`cordis_inspect_query` 查 `Slots.listSubTree`（应有 `conversation.composer.dock`
-   里 id `zhongyi-kepu`、order 6），并顺手核一遍 §2 的四个接口名（`Service`/`Event`）。
-3. **真机点一次按钮**（HANDOVER §四.4 的唯一硬要求）：输入框下方点「📜 典籍科普」→ 输入「秋燥」→ 点「生成」
-   - 成功：面板出现「检索结果（库中原句…）」+ 带出处的条文；
-   - 失败：把 `QYS_PROJECT` 指到坏路径再点一次，面板应显示「⚠️ 检索失败：…」**带原因**。
-   再切一次语言（设置 → 通用 → 语言）确认文案跟着变。
+```console
+$ dsh plugin --profile desktop add \
+    /Users/nicklaus/Desktop/600-work_programme/qys-for-clinic/plugins/dsh-plugin-zhongyi-kepu
+dependencies:
++ dsh-plugin-zhongyi-kepu link:/Users/nicklaus/Desktop/600-work_programme/qys-for-clinic/plugins/dsh-plugin-zhongyi-kepu
+Done in 232ms using pnpm v11.7.0
+```
 
-⚠️ 若装了之后**收起态的按钮没出现**：先看 devtools console 有没有
-`slot entry crashed in 'conversation.composer.dock'`（本插件用的是继承色，不该是样式问题）；
-再确认客户端 bundle 是新的一代（`host-plugin.md`：替换已装的包需要重启才加载新的 JS 模块）。
+⚠️ **为什么这不是「绕过官方路径」**：`dsh plugin` 走的是 `@deepseek-ai/dsh-plugin-manager/operations`
+的 `runProfilePnpm` —— **和 `plugin_manager` 工具同一套实现**（连 bundle selection 都一起做了，
+不用手改 profile 的 `package.json`）。我核过 CLI 源码 `dsh/lib/plugin-BGnVfe_D.js` 才用的它。
+
+装完的效果（三处都核过）：
+
+| 位置 | 结果 |
+|---|---|
+| `~/.dsh/profiles/desktop/package.json` → `dependencies` | `"dsh-plugin-zhongyi-kepu": "link:/Users/…/plugins/dsh-plugin-zhongyi-kepu"` |
+| 同上 → `dsh.profile.bundles` | 已追加 `"dsh-plugin-zhongyi-kepu"`（**pnpm 步骤自己加的**，不是手写的） |
+| `~/.dsh/profiles/desktop/node_modules/dsh-plugin-zhongyi-kepu` | 软链 → 仓库里的插件目录（**改代码即时可见**，无需重装） |
+
+**组合预检**（怕重启把 App 弄挂，先用一次性的 `DSH_HOME` 跑了一遍真组合）：
+
+```console
+$ DSH_HOME=/tmp/kepu-verify/home dsh plugin --profile preflight add <同一个绝对目录>
+dsh: initialized profile preflight at /tmp/kepu-verify/home/profiles/preflight
+$ DSH_HOME=/tmp/kepu-verify/home dsh --profile preflight --dump-config | grep -A1 zhongyi
+# == dsh-plugin-zhongyi-kepu
+- id: zhongyi-kepu
+  name: dsh-plugin-zhongyi-kepu
+```
+
+⇒ bundle patch **能干净地插入一行**，没有 id 冲突、没有配置错误。
+（`dsh --profile desktop --dump-config` 被拒：*profile "desktop" is managed exclusively by the Electron application* —— 所以才用临时 profile 验。）
+
+### 5.2 ⚠️ 还差一步：让运行中的 App 重组 profile
+
+`desktop` profile **没有任何文件监听**（`dsh-desktop-host` / `plugin-manager` 里查不到 `fs.watch`），
+且 `~/.dsh/profiles/desktop/cordis.yml` 的 mtime 仍是 **22:29**（我 00:30 装的）⇒
+**插件的行还没进内存里的 Loader 树**，界面自然也还没有按钮。
+
+任选一条（captain 操作，我做不到：重启 App 会杀掉我自己的会话）：
+
+1. **设置 → 插件**：找到 `dsh-plugin-zhongyi-kepu`，**关一次再开**（这条走 Loader 的热更新，不用重启）；
+2. 或**完全退出 DeepSeek Harness 再打开**（最稳）。
+
+### 5.3 最后：真机点一次按钮（HANDOVER §四.4 的唯一硬要求）
+
+- ✅ **成功路径**：输入框下方点「📜 典籍科普」→ 输入「秋燥」→ 点「生成」
+  ⇒ 面板出现「检索结果（库中原句，引用请保留 [编号] 与出处）」+ 带出处的条文。
+- ⚠️ **失败路径**（要证「真报错」）：把取数层指到坏路径再点一次
+  ⇒ 面板应显示「⚠️ 检索失败：…」**带原因**。两种做法：
+  - 让插件进程读到坏路径：`QYS_PROJECT=/tmp/definitely-missing`（需在**启动 App 的环境变量**里设，改了要重启）；
+  - 或临时把 `~/.dsh/profiles/desktop/node_modules` 里那份 `qys_data` 挪走 —— 不推荐，动真库。
+- 再切一次语言（设置 → 通用 → 语言）确认文案跟着变（`t` 席是活的）。
+
+⚠️ 若激活后**收起态的按钮没出现**：先看 devtools console 有没有
+`slot entry crashed in 'conversation.composer.dock'`（本插件只用继承色，不该是样式问题）。
+
+### 5.4 回退（一条命令）
+
+```console
+$ dsh plugin --profile desktop remove dsh-plugin-zhongyi-kepu
+```
+
+（或手删 `~/.dsh/profiles/desktop/package.json` 里 `bundles` 的 `dsh-plugin-zhongyi-kepu`
+那一行 + `dependencies` 里的 link；再重启 App。）
 
 ---
 
