@@ -29,7 +29,11 @@ console.log('校验 ' + basename(dir) + '（包名 ' + pkg.name + '）')
 
 // ⓪ 名字四处对齐
 chk('目录名 == 包名', basename(dir) === pkg.name, basename(dir) + ' vs ' + pkg.name)
-chk('patch name == 包名', readFileSync(join(dir, 'cordis.patch.yml'), 'utf8').includes("'" + pkg.name + "'"))
+// ⚠️ patch 里的 name 可能带引号也可能不带（YAML 两种都合法）⇒ 用词边界匹配，别假报警
+const patchTxt = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
+chk('patch 里有 name: 包名（引号可有可无）',
+    new RegExp('name:\\s*[\'"]?' + pkg.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[\'"]?\\s*$', 'm').test(patchTxt),
+    'patch 里没找到 name: ' + pkg.name)
 
 // ① 不 import dsh 内部包（外部插件自足）
 const imports = [...src.matchAll(/^import\s+(?:[^'"]*from\s+)?['"]([^'"]+)['"]/gm)].map(m => m[1])
