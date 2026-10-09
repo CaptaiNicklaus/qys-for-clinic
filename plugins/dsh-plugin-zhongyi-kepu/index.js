@@ -132,9 +132,17 @@ export function apply(ctx) {
       '从中医典籍库检索与一个主题相关的原文条文，每条都带出处（细到篇名，或至少到书名）。' +
       '⚠️ 只返回库里真实存在的条文；库中没有就说没有，绝不编造。' +
       '这是科普内容生产的第一步：先看"库里有什么"，再决定讲什么。',
+    // ⚠️⚠️ 必须是**完整 JSON Schema**（type:'object' + properties + required）。
+    //    扁平写法（{topic:{...}, k:{...}}）只有 defineTool 会替你包 —— 我们不用它，就得自己包。
+    //    ⚠️ 不包的话模型 API 会报：schema must be a JSON Schema of 'type:"object"', got 'type: null'
     parameters: {
-      topic: { type: 'string', required: true, description: '主题或问题，例如「秋燥」「失眠」「脾胃调理」' },
-      k: { type: 'number', required: false, description: '返回条数上限，默认 12' },
+      type: 'object',
+      properties: {
+        topic: { type: 'string', description: '主题或问题，例如「秋燥」「失眠」「脾胃调理」' },
+        k: { type: 'number', description: '返回条数上限，默认 12' },
+      },
+      required: ['topic'],
+      additionalProperties: false,
     },
     timeoutMs: 60000,
     // ⭐ register 硬要求 output { schema, render }
