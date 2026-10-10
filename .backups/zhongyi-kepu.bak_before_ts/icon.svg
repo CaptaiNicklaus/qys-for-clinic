@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="中医典籍科普">
+  <rect x="10" y="14" width="44" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="3"/>
+  <path d="M32 14v36" stroke="currentColor" stroke-width="2" opacity=".5"/>
+  <path d="M17 24h10M17 31h10M17 38h10M37 24h10M37 31h10M37 38h10" stroke="currentColor" stroke-width="2" opacity=".7"/>
+</svg>
