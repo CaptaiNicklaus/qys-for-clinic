@@ -57,6 +57,40 @@ const R9 = [
 const R9_1_A = /(堂|诊所|医馆|中医馆|门诊|医院|国医馆)/          // ① 机构名特征
 const R9_1_B = /(地址|电话|微信|二维码|扫码|地图搜|导航|联系)/   // ② 联系方式/地址
 
+
+/**
+ * ⭐ 否定／免责语境判定（v0.2 新增）
+ *
+ * ⚠️ **为什么必须有这一层** —— 2026-10-10 真机跑 `zhongyi_produce` 暴露的真问题：
+ *    命中的是「剂量」，而它出现在 **「库中未见具体方药、剂量与疗程」** 这句里 ——
+ *    ⭐ **那是一句【否定式免责】，恰恰是我们最该保留、最该鼓励的合规表述**，
+ *    却被关键词闸当成 BLOCK 拦下。
+ *    ⇒ ⭐ 这正是研判报告 §11.4 的预警：「**词表方案天然不全**……应做**规避表达模式**而非规避词」。
+ *
+ * ⚠️ **但豁免必须收窄**，否则会放过真违规：
+ *    · ⭐ **只对 R4（诊疗动作）与 R9（导流）豁免** ——
+ *      ⛔ **R2（疗效承诺）绝不豁免**：因为「无副作用」「无依赖」本身就**是**承诺，
+ *         「无」字是命中短语的一部分，不是免责语境。
+ *    · ⭐ 只有**否定词紧贴命中词之前**（同句、间隔 ≤ 6 字）才算豁免。
+ */
+const NEG = /(未|无|没有|不|非|未见|未及|不予|不含|不得|禁止|避免|切勿|勿|莫|免)\s*[^。！？]{0,6}$/
+
+function isNegated(sentence, idx) {
+  const before = sentence.slice(Math.max(0, idx - 12), idx)
+  return NEG.test(before)
+}
+
+/** 按句切分，返回每个命中词所在的句子（用于判定语境）。 */
+function sentenceOf(text, idx) {
+  const start = Math.max(text.lastIndexOf('。', idx - 1), text.lastIndexOf('，', idx - 1), text.lastIndexOf('；', idx - 1), text.lastIndexOf('\n', idx - 1)) + 1
+  let end = text.length
+  for (const ch of ['。', '！', '？', '\n']) {
+    const i = text.indexOf(ch, idx)
+    if (i >= 0 && i < end) end = i
+  }
+  return text.slice(start, end)
+}
+
 const BLOCK = 'BLOCK', REWRITE = 'REWRITE', WARN = 'WARN'
 
 /**
@@ -66,14 +100,26 @@ const BLOCK = 'BLOCK', REWRITE = 'REWRITE', WARN = 'WARN'
 export function check(text) {
   const s = String(text || '')
   const hits = []
-  const push = (id, rule, action, matched) => hits.push({ id, rule, action, matched })
+  const push = (id, rule, action, matched, negated) => hits.push({ id, rule, action, matched, negated: !!negated })
 
   for (const [id, rule, words] of [...R2.map(r => [r[0], r[1], r[2]]),
                                   ...R3.map(r => [r[0], r[1], r[2]]),
                                   ...R4.map(r => [r[0], r[1], r[2]]),
                                   ...R9.map(r => [r[0], r[1], r[2]])]) {
+    // ⭐ 只有 R4/R9 允许"否定式免责"豁免；⛔ R2/R3 绝不豁免（"无副作用"本身就是承诺）
+    const exemptible = id.startsWith('R4') || id.startsWith('R9')
     for (const w of words) {
-      if (s.includes(w)) push(id, rule, id.startsWith('R2') || id.startsWith('R3') || id.startsWith('R9') ? BLOCK : BLOCK, w)
+      let from = 0
+      for (;;) {
+        const i = s.indexOf(w, from)
+        if (i < 0) break
+        from = i + w.length
+        if (exemptible && isNegated(sentenceOf(s, i), sentenceOf(s, i).lastIndexOf(w))) {
+          push(id, rule, WARN, w, true)        // ⭐ 降级为 WARN 并标 negated
+          continue
+        }
+        push(id, rule, BLOCK, w)
+      }
     }
   }
   if (R4_6.test(s)) push('R4.6', '症状→病机直接映射', BLOCK, s.match(R4_6)[0])
@@ -87,14 +133,24 @@ export function check(text) {
   const passHint = /正规医院|正规渠道|线下正规医疗机构|及时就医|医师指导下/.test(s)
 
   const dedup = [...new Map(hits.map(h => [h.id + h.matched, h])).values()]
-  return { pass: dedup.length === 0, hits: dedup, needsRewrite: dedup.some(h => h.action === REWRITE), passHint }
+  const blocks = dedup.filter(h => h.action === BLOCK)
+  return { pass: blocks.length === 0, hits: dedup, needsRewrite: dedup.some(h => h.action === REWRITE),
+           warnings: dedup.filter(h => h.negated), passHint }
 }
 
 /** 把命中结果渲染成给人看的一段话（含规则名，可解释、不黑箱）。 */
 export function explain(res) {
-  if (res.pass) return '✅ 合规闸：未命中任何规则。' + (res.passHint ? '（含"及时就医"类安全表述）' : '')
-  const lines = ['⛔ 合规闸命中 ' + res.hits.length + ' 条：']
-  for (const h of res.hits) lines.push(`  · [${h.id}] ${h.rule}（${h.action}）—— 命中「${h.matched}」`)
-  lines.push('', '⚠️ 命中即须改写或删除；改写方向见报告 R13「安全表达改写库」。')
-  return lines.join('\n')
+  const out = []
+  if (res.pass) out.push('✅ 合规闸：无阻断项。' + (res.passHint ? '（含"及时就医"类安全表述）' : ''))
+  else {
+    out.push('⛔ 合规闸命中 ' + res.hits.filter(h => h.action === BLOCK).length + ' 条（须改写或删除）：')
+    for (const h of res.hits.filter(h => h.action === BLOCK)) out.push(`  · [${h.id}] ${h.rule}（${h.action}）—— 命中「${h.matched}」`)
+  }
+  // ⭐ 被"否定式免责"豁免的，如实报出来（不隐藏，也不拦）
+  if (res.warnings && res.warnings.length) {
+    out.push('', '⚠️ 以下命中因处于**否定/免责语境**而豁免（v0.2 起）：')
+    for (const h of res.warnings) out.push(`  · [${h.id}] ${h.rule} —— 命中「${h.matched}」（否定式免责，不拦）`)
+  }
+  if (!res.pass) out.push('', '⚠️ 命中即须改写或删除；改写方向见报告 R13「安全表达改写库」。')
+  return out.join('\n')
 }
