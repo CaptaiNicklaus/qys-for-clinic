@@ -24,7 +24,21 @@ export const name = 'zhongyi-kepu'
  * ⚠️ 只硬依赖 `tools`：工具是已实测的核心，**没有命令面的 profile 也必须注册**。
  * `commands` 是可选服务，见下面 `ctx.inject(['commands'], …)`。
  */
-export const inject = ['tools', 'llm', 'agentDefaultModel']
+export const inject = ['tools', 'llm']
+
+/**
+ * ⭐⭐ captain 第 258 轮拍板：**走 B —— `deepseek-account` 路由**。
+ *
+ * ⚠️ 两条路由语义完全不同（DSH 会话在装好的 0.2.0-rc.2 里核出）：
+ *    · `deepseek-official` —— x-api-key（credentials），**QUOTA 中立、没有充值入口** ⇒ 只能内部用
+ *    · `deepseek-account`  —— x-dsh-auth-token，⭐ **账号余额 · 402→ACCOUNT_QUOTA · 有充值 UX**
+ * ⇒ ⭐ **要"客户充值 → 扣他们余额"，就必须走 account 这条。**
+ *
+ * ⚠️ 这里钉死的是**路由名与模型 id**，⛔ **不是 key** ——
+ *    鉴权仍由 App 进程按路由在请求时解析，**插件里永远没有凭据**。
+ *    （⚠️ 没用插件的 `Config`：那要 `@deepseek-ai/schemastery`，而外部插件不能 import dsh 包。）
+ */
+const LLM_ROUTE = { provider: 'deepseek-account', model: 'deepseek-flash' }
 
 const PROJECT = process.env.QYS_PROJECT
   || '/Users/nicklaus/Desktop/100-work_academic/@_中医知识图谱_项目'
@@ -141,7 +155,7 @@ function applyCommand(ctx) {
  *       必须显式给 maxTokens，且把它当**失败**显示，⛔ 绝不能当"空文案"过闸。
  */
 async function askLlm(ctx, { system, user, maxTokens = 3000, signal }) {
-  const route = ctx.agentDefaultModel.currentSelection()
+  const route = LLM_ROUTE   // ⭐ 钉死 account 路由（captain 拍板 B）；不再跟随 App 默认
   let text = '', finish
   for await (const chunk of ctx.llm.stream({
     provider: route.provider,
