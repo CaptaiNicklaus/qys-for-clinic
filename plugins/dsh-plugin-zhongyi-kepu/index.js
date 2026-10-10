@@ -153,8 +153,13 @@ function applyCommand(ctx) {
  *    ① 适配器错误**不 throw**，会变成终结块 ⇒ 不看 `finish` 就把失败当空答案；
  *    ② `EMPTY_RESPONSE`（可见内容为 0 且 finish=stop）**在默认可重试集合里** ⇒
  *       必须显式给 maxTokens，且把它当**失败**显示，⛔ 绝不能当"空文案"过闸。
+ *    ⚠️⚠️ **maxTokens 实测必须给足**（DSH Creator 侧会话 2026-10-10 实测）：
+ *       deepseek-flash 会开思考，**思维链占 95%** ——
+ *       成功那次 completion 6193 里 reasoning 5902；
+ *       给 3000 时 `finish_reason=length`、**正文为空** ⇒ 工具对"秋燥"这类主题**必然回「生成失败」**。
+ *       ⇒ ⭐ 取 **8000**（实测正常 stop 出稿）。⛔ 别按"正文 320 字"去估 maxTokens。
  */
-async function askLlm(ctx, { system, user, maxTokens = 3000, signal }) {
+async function askLlm(ctx, { system, user, maxTokens = 8000, signal }) {
   const route = LLM_ROUTE   // ⭐ 钉死 account 路由（captain 拍板 B）；不再跟随 App 默认
   let text = '', finish
   for await (const chunk of ctx.llm.stream({
