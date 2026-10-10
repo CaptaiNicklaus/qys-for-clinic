@@ -16,14 +16,15 @@
  *    ⇒ **操作的实现只有一份**，失败也由它一处给出原因，两边共享同一套结果文本。
  *    ⚠️ `retrieve()` 的检索逻辑一行未动（那是唯一实测过的部分）。
  */
-import { spawnSync } from 'node:child_process'   // ⚠️ 只用 Node 内建模块；⛔ 绝不 import @deepseek-ai/*
+import { spawnSync } from 'node:child_process'
+import { check, explain } from './compliance.js'   // 自研，相对 import 可行（whale-pet 有先例）   // ⚠️ 只用 Node 内建模块；⛔ 绝不 import @deepseek-ai/*
 
 export const name = 'zhongyi-kepu'
 /**
  * ⚠️ 只硬依赖 `tools`：工具是已实测的核心，**没有命令面的 profile 也必须注册**。
  * `commands` 是可选服务，见下面 `ctx.inject(['commands'], …)`。
  */
-export const inject = ['tools']
+export const inject = ['tools', 'llm', 'agentDefaultModel']
 
 const PROJECT = process.env.QYS_PROJECT
   || '/Users/nicklaus/Desktop/100-work_academic/@_中医知识图谱_项目'
@@ -124,6 +125,55 @@ function applyCommand(ctx) {
   })
 }
 
+/**
+ * 走 **App 自己配置的 provider** 跑一次补全。
+ *
+ * ⚠️ 逐字照抄 DSH 会话在**装好的 0.2.0-rc.2 实体代码**里核出的写法：
+ *    · 服务名 `'llm'`              —— dsh-llm/lib/index.js:1801
+ *    · `ctx.llm.stream(options)`   —— :2355-2367（**异步块流，必须 for await**）
+ *    · 路由 `ctx.agentDefaultModel.currentSelection()` —— 返回 {provider, model, reasoningEffort?}
+ * ⭐ **插件里永不出现任何 key** —— 鉴权由 App 进程按路由在请求时解析。
+ *    ⇒ 这就是"客户 App 里走 App 自己账号与计费"的技术落点（第三步能收钱的命门）。
+ *
+ * ⚠️ 两个坑都在这收口：
+ *    ① 适配器错误**不 throw**，会变成终结块 ⇒ 不看 `finish` 就把失败当空答案；
+ *    ② `EMPTY_RESPONSE`（可见内容为 0 且 finish=stop）**在默认可重试集合里** ⇒
+ *       必须显式给 maxTokens，且把它当**失败**显示，⛔ 绝不能当"空文案"过闸。
+ */
+async function askLlm(ctx, { system, user, maxTokens = 3000, signal }) {
+  const route = ctx.agentDefaultModel.currentSelection()
+  let text = '', finish
+  for await (const chunk of ctx.llm.stream({
+    provider: route.provider,
+    model: route.model,
+    ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: route.reasoningEffort }),
+    messages: [{ role: 'user', content: [{ type: 'text', text: user }] }],
+    system,
+    maxTokens,
+    ...(signal === undefined ? {} : { signal }),
+  })) {
+    if (chunk.type === 'text-delta') text += chunk.text
+    else if (chunk.type === 'finish') finish = chunk.reason
+  }
+  if (finish && finish.kind === 'error') throw new Error('LLM 失败 ' + finish.failure.code + ': ' + finish.failure.message)
+  if (finish && finish.kind === 'aborted') throw new Error('LLM 调用被取消')
+  if (!text.trim()) throw new Error('LLM 返回空正文（finish=' + (finish && finish.kind) + '）——多半是 maxTokens 太小')
+  return text
+}
+
+/** ④ 生产用的系统提示 —— 与 prototype/produce.py 里那份一致（已真跑验过）。 */
+const PRODUCE_SYSTEM = `你是「岐与笙」中医典籍库的内容编辑。任务：把**给定的典籍条文**组织成一段**合规的科普文案**。
+
+**只依据给定的条文写**，不得引入条文之外的知识，不得编造。
+
+硬要求：
+1. 每一条论断后必须用 [编号] 标注来源（编号即给定条文的序号）。
+2. **不做诊断、不推荐方药、不给剂量、不给疗程、不针对个人症状**。只讲典籍里怎么记载、历代怎么说。
+3. 若条文之间有**分歧**，要点出分歧（谁主张什么）。
+4. 若条文**不足以**支撑某个说法，直说「库中未找到直接依据」，不要猜。
+5. 输出结构：**① 一句话导语 → ② 典籍怎么说（3–5 点，每点带 [n]）→ ③ 小结**。
+6. 简体中文，**不超过 320 字**。`
+
 export function apply(ctx) {
   applyCommand(ctx)
   ctx.tools.register({
@@ -158,4 +208,44 @@ export function apply(ctx) {
       return retrieveText(String((args && args.topic) || ''), k).text
     },
   })
+
+    // ⭐ ④＋⑤ 一体：检索 → LLM 生成 → **过合规闸** → 返回「文案 + 合规报告」
+    ctx.tools.register({
+      name: 'zhongyi_produce',
+      description:
+        '围绕一个主题生产**合规的中医科普文案**：先从 824 部典籍检索带出处的条文，'
+        + '再组织成科普文案（每条论断标 [n]），最后**过平台合规闸**并同时返回合规报告。'
+        + '⚠️ 只依据库中条文；合规闸命中会如实报告，不要当作没发生。',
+      parameters: {
+        type: 'object',
+        properties: {
+          topic: { type: 'string', description: '主题，例如「秋燥」「失眠」「脾胃调理」' },
+          k: { type: 'number', description: '检索条数上限，默认 12' },
+        },
+        required: ['topic'],
+        additionalProperties: false,
+      },
+      output: {
+        schema: { type: 'string' },
+        render: (_args, value) => [{ type: 'text', text: String(value == null ? '' : value) }],
+      },
+      // ⚠️ 带思考的一次生成可能远超 60s（上游实测 deepseek-flash 无默认 maxTokens）
+      timeoutMs: 180000,
+      execute: async (args, exec) => {
+        const topic = String((args && args.topic) || '').trim()
+        if (!topic) return '请给一个主题。'
+        const k = Math.min(Math.max(Number((args && args.k) || 12), 1), 30)
+        const r = retrieveText(topic, k)
+        if (!r.ok) return '检索失败：' + r.text
+        let copy
+        try {
+          copy = await askLlm(ctx, { system: PRODUCE_SYSTEM, user: r.text, signal: exec && exec.signal })
+        } catch (e) {
+          return '⚠️ 生成失败：' + ((e && e.message) || String(e))   // ⚠️ 失败要带原因，别当空文案
+        }
+        const gate = check(copy)
+        return ['【科普文案】', copy, '', '【合规闸】', explain(gate), '',
+                '⚠️ 命中项须先改写或删除再发布；合规报告请随文案一并留存。'].join('\n')
+      },
+    })
 }
